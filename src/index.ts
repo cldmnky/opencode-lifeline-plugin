@@ -200,15 +200,6 @@ export const LifelinePlugin: Plugin = async (ctx) => {
       const sessionID: string | null = (input.sessionID as string | undefined) ?? activeSessionID
 
       if (sessionID) {
-        // Debug: log tool outcome to confirm hook fires
-        await ctx.client.app.log({
-          body: {
-            service: "opencode-lifeline",
-            level: "info",
-            message: `tool.execute.after: tool=${toolName} success=${success} exitCode=${meta?.exitCode ?? "n/a"} sessionID=${sessionID}`,
-          },
-        }).catch(() => {})
-
         recordToolOutcome(sessionID, {
           tool: toolName,
           success,

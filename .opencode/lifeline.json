@@ -1,0 +1,16 @@
+{
+  "auto": true,
+  "action": "ask",
+  "minRunsBetweenCalls": 2,
+  "triggerAfterConsecutiveFailures": 6,
+  "triggerAfterPlateauRuns": 8,
+  "maxCallsPerSession": 10,
+  "advisor": {
+    "provider": "opencode-go",
+    "model": "kimi-k2.6",
+    "maxTokens": 4096,
+    "temperature": 0.7
+  },
+  "implicitDetection": true,
+  "includeContext": true
+}
