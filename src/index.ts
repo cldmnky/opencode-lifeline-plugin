@@ -9,7 +9,7 @@ import { tool, type Plugin } from "@opencode-ai/plugin"
 import * as fs from "node:fs"
 import * as path from "node:path"
 
-import { loadConfig } from "./config.ts"
+import { loadConfig } from "./lib/config.ts"
 import {
   getState,
   recordRun,
@@ -18,10 +18,10 @@ import {
   recordExperimentRun,
   recordAdvisorCall,
   setProcessing,
-} from "./state.ts"
-import { detectStuck, readAutoresearchData } from "./detector.ts"
-import { askAdvisor } from "./advisor.ts"
-import type { TriggerResult, AdvisorParams } from "./types.ts"
+} from "./lib/state.ts"
+import { detectStuck, readAutoresearchData } from "./lib/detector.ts"
+import { askAdvisor } from "./lib/advisor.ts"
+import type { TriggerResult, AdvisorParams } from "./lib/types.ts"
 
 // Best-effort tracking of the currently active session
 let activeSessionID: string | null = null
@@ -123,7 +123,7 @@ async function buildContext(ctx: any, config: ReturnType<typeof loadConfig>, ses
     if (data.runs.length > 0) {
       const recent = data.runs
         .slice(-8)
-        .map((r) => `#${r.run} ${r.status} ${data.metricName}=${r.metric} ${r.description ?? ""}`.trim())
+        .map((r: { run: number; status: string; metric: number; description?: string }) => `#${r.run} ${r.status} ${data.metricName}=${r.metric} ${r.description ?? ""}`.trim())
         .join("\n")
       parts.push(`Recent autoresearch runs:\n${recent}`)
     }
@@ -186,11 +186,29 @@ export const LifelinePlugin: Plugin = async (ctx) => {
     // Track successful tool calls for implicit progress detection
     "tool.execute.after": async (input: any, output: any) => {
       const toolName = input.tool as string
-      const success = output.error === undefined && output.result !== undefined
+      // The hook output shape is: { title, output, metadata }
+      // Infer failure from metadata.error or by checking output string for error patterns
+      const meta = output.metadata as Record<string, unknown> | undefined
+      const outStr = (output.output as string | undefined) ?? ""
+      const success =
+        meta?.error === undefined &&
+        meta?.exitCode !== 1 &&
+        !(typeof meta?.exitCode === "number" && meta.exitCode !== 0) &&
+        !outStr.startsWith("Error:") &&
+        !outStr.startsWith("error:")
       // Prefer session ID from the tool execution context; fall back to module-level tracker
       const sessionID: string | null = (input.sessionID as string | undefined) ?? activeSessionID
 
       if (sessionID) {
+        // Debug: log tool outcome to confirm hook fires
+        await ctx.client.app.log({
+          body: {
+            service: "opencode-lifeline",
+            level: "info",
+            message: `tool.execute.after: tool=${toolName} success=${success} exitCode=${meta?.exitCode ?? "n/a"} sessionID=${sessionID}`,
+          },
+        }).catch(() => {})
+
         recordToolOutcome(sessionID, {
           tool: toolName,
           success,
