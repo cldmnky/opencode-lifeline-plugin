@@ -1,0 +1,16 @@
+{
+  "auto": true,
+  "action": "nudge",
+  "minRunsBetweenCalls": 5,
+  "triggerAfterConsecutiveFailures": 3,
+  "triggerAfterPlateauRuns": 6,
+  "maxCallsPerSession": 10,
+  "advisor": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "maxTokens": 4096,
+    "temperature": 0.7
+  },
+  "implicitDetection": true,
+  "includeContext": true
+}
