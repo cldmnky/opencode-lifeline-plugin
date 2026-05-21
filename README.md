@@ -13,6 +13,7 @@ An [OpenCode](https://opencode.ai) plugin that lets a smaller/local model **phon
   - External API: use any OpenAI-compatible API directly
 - **Session-scoped state**: Tracking resets per session; no persistence across sessions
 - **Rate limiting**: Configurable minimum runs between calls and max calls per session
+- **Compaction-aware context**: Preserves bounded Lifeline state during OpenCode session compaction
 
 ## Installation
 
@@ -188,6 +189,12 @@ Even without `log_experiment`, the plugin detects stuck patterns by monitoring:
 3. **Run counter**: Incremented on each `session.idle` event
 
 Implicit detection only activates after a coding-relevant tool (`bash`, `edit`, `write`, `grep`, `glob`, `read`) has been used, preventing false triggers on purely conversational sessions.
+
+### Compaction Context
+
+OpenCode can compact long sessions. Lifeline adds a bounded summary to the `experimental.session.compacting` hook so continuation summaries retain useful stuck-detection context.
+
+The summary includes run counts, advisor call count, the last trigger reason, recent advisor advice, recent `autoresearch.jsonl` runs, and recent failed tool names. It is truncated before injection to avoid bloating the compaction prompt.
 
 ### Trigger Action
 

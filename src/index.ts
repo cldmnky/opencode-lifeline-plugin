@@ -27,6 +27,13 @@ import type { TriggerResult, AdvisorParams } from "./lib/types.ts"
 // Best-effort tracking of the currently active session
 let activeSessionID: string | null = null
 
+// Compaction context limits
+const MAX_ADVICE_CHARS = 1200
+const MAX_EXPERIMENT_CONTEXT_CHARS = 1500
+const MAX_COMPACTION_CONTEXT_CHARS = 3000
+const MAX_RECENT_EXPERIMENTS = 8
+const MAX_RECENT_TOOL_OUTCOMES = 20
+
 async function handleTrigger(
   ctx: any,
   config: ReturnType<typeof loadConfig>,
@@ -115,6 +122,13 @@ async function handleTrigger(
   }
 }
 
+function truncate(text: string, maxChars: number): string {
+  if (text.length <= maxChars) {
+    return text
+  }
+  return `${text.slice(0, maxChars).trimEnd()}\n[truncated]`
+}
+
 async function buildContext(ctx: any, config: ReturnType<typeof loadConfig>, sessionID: string): Promise<string> {
   const parts: string[] = []
 
@@ -150,6 +164,72 @@ async function buildContext(ctx: any, config: ReturnType<typeof loadConfig>, ses
   return parts.filter(Boolean).join("\n\n")
 }
 
+async function buildCompactionContext(
+  ctx: any,
+  config: ReturnType<typeof loadConfig>,
+  sessionID: string,
+): Promise<string> {
+  const state = getState(sessionID)
+  const parts: string[] = []
+
+  const lastProgress =
+    state.lastProgressRun === null ? "none" : String(state.lastProgressRun)
+  const runsSinceProgress =
+    state.lastProgressRun === null
+      ? state.runCount
+      : state.runCount - state.lastProgressRun
+
+  parts.push("## Lifeline Stuck Detection Context")
+  parts.push(
+    [
+      `- Runs observed: ${state.runCount}`,
+      `- Advisor calls this session: ${state.callsThisSession}/${config.maxCallsPerSession}`,
+      `- Last trigger reason: ${state.lastReason ?? "none"}`,
+      `- Last progress run: ${lastProgress}`,
+      `- Runs since progress: ${runsSinceProgress}`,
+      `- Coding activity detected: ${state.codingSessionStarted ? "yes" : "no"}`,
+    ].join("\n"),
+  )
+
+  if (state.lastAdvice) {
+    parts.push(
+      [
+        "### Recent Advisor Recommendation",
+        truncate(state.lastAdvice, MAX_ADVICE_CHARS),
+      ].join("\n"),
+    )
+  }
+
+  const data = readAutoresearchData(ctx.directory)
+  if (data.runs.length > 0) {
+    const recentRuns = data.runs
+      .slice(-MAX_RECENT_EXPERIMENTS)
+      .map((run: { run: number; status: string; metric: number; description?: string }) =>
+        `#${run.run} ${run.status} ${data.metricName}=${run.metric} ${run.description ?? ""}`.trim(),
+      )
+      .join("\n")
+
+    parts.push(
+      [
+        "### Recent Experiment Runs",
+        truncate(recentRuns, MAX_EXPERIMENT_CONTEXT_CHARS),
+      ].join("\n"),
+    )
+  }
+
+  const failedTools = state.recentToolOutcomes
+    .slice(-MAX_RECENT_TOOL_OUTCOMES)
+    .filter((outcome) => !outcome.success)
+    .map((outcome) => outcome.tool)
+
+  const uniqueFailedTools = Array.from(new Set(failedTools))
+  if (uniqueFailedTools.length > 0) {
+    parts.push(`### Recent Failed Tools\n${uniqueFailedTools.join(", ")}`)
+  }
+
+  return truncate(parts.join("\n\n"), MAX_COMPACTION_CONTEXT_CHARS)
+}
+
 export const LifelinePlugin: Plugin = async (ctx) => {
   const config = loadConfig(ctx.directory)
 
@@ -182,6 +262,22 @@ export const LifelinePlugin: Plugin = async (ctx) => {
           await handleTrigger(ctx, config, result, sid)
         }
       }
+    },
+
+    // Inject bounded Lifeline state into session compaction summaries
+    "experimental.session.compacting": async (input: any, output: any) => {
+      const sessionID = input.sessionID as string | undefined
+      if (!sessionID) {
+        return
+      }
+
+      const summary = await buildCompactionContext(ctx, config, sessionID)
+      if (!summary) {
+        return
+      }
+
+      output.context ??= []
+      output.context.push(summary)
     },
 
     // Track successful tool calls for implicit progress detection
