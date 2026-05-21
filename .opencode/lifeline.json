@@ -7,7 +7,7 @@
   "maxCallsPerSession": 10,
   "advisor": {
     "provider": "opencode-go",
-    "model": "kimi-k2.6",
+    "model": "glm-5.1",
     "maxTokens": 4096,
     "temperature": 0.7
   },
