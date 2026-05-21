@@ -18,6 +18,7 @@ import {
   recordExperimentRun,
   recordAdvisorCall,
   setProcessing,
+  recordCodingActivity,
 } from "./lib/state.ts"
 import { detectStuck, readAutoresearchData } from "./lib/detector.ts"
 import { askAdvisor } from "./lib/advisor.ts"
@@ -204,8 +205,11 @@ export const LifelinePlugin: Plugin = async (ctx) => {
           tool: toolName,
           success,
           timestamp: Date.now(),
-          error: output.error,
+          error: meta?.error ? (typeof meta.error === "string" ? meta.error : JSON.stringify(meta.error)) : undefined,
         })
+
+        // Track that this session involves coding activity (gates implicit detection)
+        recordCodingActivity(sessionID, toolName)
 
         // Successful file modifications count as progress
         if (success && (toolName === "edit" || toolName === "write")) {

@@ -1,6 +1,6 @@
 # OpenCode Lifeline Plugin
 
-An [OpenCode](https://opencode.ai) plugin inspired by [pi-lifeline](https://github.com/robzolkos/pi-lifeline) that lets a smaller/local model **phone-a-friend** (a stronger advisor model) when it gets stuck in an optimization or debugging loop.
+An [OpenCode](https://opencode.ai) plugin that lets a smaller/local model **phone-a-friend** (consult a stronger advisor model) when it gets stuck in an optimization or debugging loop. Hybrid stuck detection combines explicit experiment tracking via `log_experiment` with implicit heuristics (consecutive tool errors, no-progress plateau). Supports `nudge` mode (suggest advisor call) or `ask` mode (auto-call advisor).
 
 ## Features
 
@@ -16,39 +16,50 @@ An [OpenCode](https://opencode.ai) plugin inspired by [pi-lifeline](https://gith
 
 ## Installation
 
-### 1. Add dependencies
+OpenCode plugins are loaded from `.opencode/plugins/<name>/` directories (project-level or global).
 
-Add the plugin package to your OpenCode config directory:
+### 1. Install OpenCode
 
 ```bash
-# In your project:
-echo '{ "dependencies": { "@opencode-ai/plugin": "^1.1.0" } }' > .opencode/package.json
+# macOS / Linux
+brew install opencode-ai
 
-# Or globally:
-echo '{ "dependencies": { "@opencode-ai/plugin": "^1.1.0" } }' > ~/.config/opencode/package.json
+# Or via npm/pnpm/bun
+npm install -g opencode-ai
+
+# Verify
+opencode --version
 ```
 
-### 2. Copy plugin files
-
-Copy the plugin source into your OpenCode plugins directory:
+### 2. Create plugin directory
 
 ```bash
-# Project-level (recommended)
-cp -r src/ .opencode/plugins/opencode-lifeline/
+mkdir -p .opencode/plugins/opencode-lifeline
+```
+
+### 3. Copy plugin files
+
+```bash
+# Project-level (recommended for per-project config)
+cp -r src/* .opencode/plugins/opencode-lifeline/
 
 # Or globally
-cp -r src/ ~/.config/opencode/plugins/opencode-lifeline/
+cp -r src/* ~/.config/opencode/plugins/opencode-lifeline/
 ```
 
-Or symlink for development:
+For development, use a symlink so changes reload on restart:
 
 ```bash
 ln -s $(pwd)/src ~/.config/opencode/plugins/opencode-lifeline
 ```
 
-### 3. Create configuration
+### 4. Configure the plugin
 
-Create `.opencode/lifeline.json` in your project (or `~/.config/opencode/lifeline.json` for global defaults):
+Create `lifeline.json` in one of the following locations (first found wins):
+
+1. `.opencode/lifeline.json` — project-level
+2. `~/.config/opencode/lifeline.json` — global (XDG)
+3. `~/.opencode/lifeline.json` — global (legacy)
 
 ```json
 {
@@ -71,7 +82,7 @@ Create `.opencode/lifeline.json` in your project (or `~/.config/opencode/lifelin
 
 See [`lifeline.json.example`](./lifeline.json.example) for the full schema.
 
-### 4. Restart OpenCode
+### 5. Restart OpenCode
 
 OpenCode loads plugins at startup. Restart to pick up the new plugin.
 
@@ -96,7 +107,7 @@ OpenCode loads plugins at startup. Restart to pick up the new plugin.
 
 ### Environment variables
 
-All config options can be overridden via environment variables:
+Advisor options can be overridden via environment variables:
 
 ```bash
 export LIFELINE_ADVISOR_PROVIDER=openai
@@ -105,6 +116,11 @@ export LIFELINE_ADVISOR_API_KEY=sk-...
 export LIFELINE_ADVISOR_BASE_URL=https://api.openai.com/v1
 export LIFELINE_ADVISOR_MAX_TOKENS=4096
 export LIFELINE_ADVISOR_TEMPERATURE=0.7
+```
+
+Testing:
+
+```bash
 export LIFELINE_FAKE_RESPONSE="Test advisor response without spending tokens"
 ```
 
@@ -120,6 +136,8 @@ question: "We've tried three parser optimizations and all failed. What should we
 mode: "next_experiment"
 context: "Attempts: inline cache (segfault), arena reuse (no improvement), branchless scan (slower)"
 max_ideas: 4
+provider: "openai"
+model: "gpt-5"
 ```
 
 Modes:
@@ -127,6 +145,10 @@ Modes:
 - `critique` — critique current approach
 - `debug` — debugging help
 - `next_experiment` — what to try next (default)
+
+Overrides:
+- `provider` — override the configured advisor provider for this call
+- `model` — override the configured advisor model for this call
 
 ### `log_experiment`
 
@@ -164,6 +186,8 @@ Even without `log_experiment`, the plugin detects stuck patterns by monitoring:
 1. **Consecutive tool errors**: Repeated failures of the same tool
 2. **No-progress plateau**: Many turns without successful file edits/writes
 3. **Run counter**: Incremented on each `session.idle` event
+
+Implicit detection only activates after a coding-relevant tool (`bash`, `edit`, `write`, `grep`, `glob`, `read`) has been used, preventing false triggers on purely conversational sessions.
 
 ### Trigger Action
 

@@ -68,6 +68,8 @@ export interface SessionState {
   lastProgressRun: number | null
   /** Whether currently processing (prevent double triggers) */
   processing: boolean
+  /** Whether a coding-relevant tool has been attempted (gates implicit detection) */
+  codingSessionStarted: boolean
 }
 
 export interface ToolOutcome {

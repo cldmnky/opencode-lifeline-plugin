@@ -5,6 +5,15 @@
 
 import type { SessionState, ExperimentRun, ToolOutcome } from "./types.ts"
 
+const CODING_TOOLS = new Set([
+  "bash",
+  "edit",
+  "write",
+  "grep",
+  "glob",
+  "read",
+])
+
 const states = new Map<string, SessionState>()
 
 export function getState(sessionID: string): SessionState {
@@ -26,6 +35,7 @@ export function createState(sessionID: string): SessionState {
     recentToolOutcomes: [],
     lastProgressRun: null,
     processing: false,
+    codingSessionStarted: false,
   }
 }
 
@@ -77,4 +87,12 @@ export function recordAdvisorCall(
 export function setProcessing(sessionID: string, processing: boolean): void {
   const state = getState(sessionID)
   state.processing = processing
+}
+
+export function recordCodingActivity(sessionID: string, toolName: string): SessionState {
+  const state = getState(sessionID)
+  if (CODING_TOOLS.has(toolName)) {
+    state.codingSessionStarted = true
+  }
+  return state
 }

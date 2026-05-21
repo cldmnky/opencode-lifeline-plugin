@@ -138,13 +138,18 @@ function detectImplicitStuck(state: SessionState, config: LifelineConfig): Trigg
     return { triggered: false, reason: "", mode: "implicit" }
   }
 
+  if (!state.codingSessionStarted) {
+    return { triggered: false, reason: "", mode: "implicit" }
+  }
+
   const outcomes = state.recentToolOutcomes
   if (outcomes.length === 0) {
     return { triggered: false, reason: "", mode: "implicit" }
   }
 
   // 1. Consecutive tool errors in recent outcomes
-  const recentOutcomes = outcomes.slice(-20)
+  const limit = Math.max(20, config.triggerAfterConsecutiveFailures)
+  const recentOutcomes = outcomes.slice(-limit)
   let consecutiveErrors = 0
   for (let i = recentOutcomes.length - 1; i >= 0; i--) {
     if (!recentOutcomes[i].success) {
@@ -162,28 +167,31 @@ function detectImplicitStuck(state: SessionState, config: LifelineConfig): Trigg
     }
   }
 
-  // 2. Plateau: no progress for N runs — only after progress has been recorded at least once
-  if (state.lastProgressRun !== null) {
-    const runsSinceProgress = state.runCount - state.lastProgressRun
-    if (state.runCount > 0 && runsSinceProgress >= config.triggerAfterPlateauRuns) {
-      return {
-        triggered: true,
-        reason: `${runsSinceProgress} runs without measurable progress (implicit plateau)`,
-        mode: "implicit",
-      }
+  // 2. Plateau: no progress for N runs — count from session start if no progress recorded yet
+  const lastProgress = state.lastProgressRun ?? 0
+  const runsSinceProgress = state.runCount - lastProgress
+  if (state.runCount > 0 && runsSinceProgress >= config.triggerAfterPlateauRuns) {
+    return {
+      triggered: true,
+      reason: `${runsSinceProgress} runs without measurable progress (implicit plateau)`,
+      mode: "implicit",
     }
   }
 
   // 3. Repeated consecutive failure pattern: same tool failing consecutively
   const toolConsecutiveErrors = new Map<string, number>()
+  const resolvedTools = new Set<string>()
   // Walk backwards to count consecutive failures per tool
   for (let i = recentOutcomes.length - 1; i >= 0; i--) {
     const outcome = recentOutcomes[i]
+    if (resolvedTools.has(outcome.tool)) {
+      continue
+    }
+
     if (!outcome.success) {
       toolConsecutiveErrors.set(outcome.tool, (toolConsecutiveErrors.get(outcome.tool) || 0) + 1)
     } else {
-      // A success resets the consecutive count for that tool
-      toolConsecutiveErrors.delete(outcome.tool)
+      resolvedTools.add(outcome.tool)
     }
   }
 
