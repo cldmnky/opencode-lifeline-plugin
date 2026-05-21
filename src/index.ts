@@ -407,7 +407,7 @@ export const LifelinePlugin: Plugin = async (ctx) => {
           context: any,
         ) {
           const sessionID = context.sessionID as string | undefined
-          const directory = context.directory as string
+          const directory = (context.directory as string | undefined) ?? ctx.directory
           const line = JSON.stringify({
             run: args.run,
             metric: args.metric,
@@ -416,8 +416,8 @@ export const LifelinePlugin: Plugin = async (ctx) => {
             timestamp: Date.now(),
           })
 
-          const jsonlPath = path.join(directory, "autoresearch.jsonl")
           try {
+            const jsonlPath = path.join(directory, "autoresearch.jsonl")
             fs.appendFileSync(jsonlPath, line + "\n")
           } catch (err) {
             return `Failed to write to autoresearch.jsonl: ${(err as Error).message}`
