@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "prepublishOnly": "tsc --noEmit"
   },
   "dependencies": {
     "@opencode-ai/plugin": "^1.1.0",
