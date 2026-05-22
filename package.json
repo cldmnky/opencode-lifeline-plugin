@@ -1,6 +1,6 @@
 {
   "name": "opencode-lifeline-plugin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OpenCode plugin that lets a smaller model phone-a-friend (stronger advisor model) when stuck",
   "type": "module",
   "main": "src/index.ts",
